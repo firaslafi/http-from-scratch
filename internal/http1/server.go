@@ -1,6 +1,7 @@
 package http1
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -29,10 +30,46 @@ func ListenAndServer(addr string, handler http.Handler) error {
 		if err != nil {
 			return fmt.Errorf("accept: %w", err)
 		}
-		log.Printf("connection accepted! %v", conn)
+		// log.Printf("connection accepted! %v", conn)
+		go HandleConnection(conn, handler)
 	}
 }
 
-func HandleConnection()  {
+// func HandleConnection(conn net.Conn, mux http.Handler) error 
+func HandleConnection(conn net.Conn, mux http.Handler) error {
+	defer conn.Close()
+
+
+
+	// read data from connection and parse it (sepreate func)
+	buff := bufio.NewReader(conn)
+
+	// change this to my own implementation
+	request, err := http.ReadRequest(buff)
 	
+	if err != nil {
+		return fmt.Errorf("read request: %w", err)
+	}
+
+	// fmt.Printf("request:\n%v+", request)
+
+	response := NewResponse(conn)
+	response.Request = request
+
+	response.Header().Add("testkey", "testvalue")
+	fmt.Printf("\nresponse header:\n%v", response.Header())
+
+	mux.ServeHTTP(response, request)
+
+	
+	// if err != nil {
+	// 	return fmt.Errorf("writing response: %w", err)
+	// }
+
+	if !response.wroteHeader {
+		response.WriteHeader(http.StatusOK)
+	}
+
+	return nil
+
 }
