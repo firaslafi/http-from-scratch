@@ -7,9 +7,9 @@ content-type: application/json
 
 ###
 
-GET http://localhost:8080/test HTTP/1.1
+GET http://localhost:8080/hello HTTP/1.1
 content-type: application/json
 
-{
-    "name": "sample"
-}
+# {
+#     "name": "sample"
+# }

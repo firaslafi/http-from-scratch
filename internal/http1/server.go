@@ -2,74 +2,109 @@ package http1
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 )
 
-// listen in TCP net addr and calls Serve() with the handler on conns
-// accepted conns configured to enable TCP keep-alive
-func ListenAndServer(addr string, handler http.Handler) error {
+func ListenAndServe(addr string, handler http.Handler) error {
 	listener, err := net.Listen("tcp", addr)
-
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-
 	defer listener.Close()
 
-	// if hanlder is nil, then use defaultmux
 	if handler == nil {
 		handler = http.DefaultServeMux
 	}
-	log.Printf("started listening on %s", listener.Addr().String())
+
+	log.Printf("Custom HTTP server running on %s", addr)
+
 	for {
 		conn, err := listener.Accept()
-
 		if err != nil {
-			return fmt.Errorf("accept: %w", err)
+			log.Printf("accept error: %v", err)
+			continue
 		}
-		// log.Printf("connection accepted! %v", conn)
-		go HandleConnection(conn, handler)
+		go func(c net.Conn) {
+			if err := HandleConnection(c, handler); err != nil {
+				log.Printf("[%s] connection error: %v", c.RemoteAddr(), err)
+			}
+		}(conn)
 	}
 }
 
-// func HandleConnection(conn net.Conn, mux http.Handler) error 
 func HandleConnection(conn net.Conn, mux http.Handler) error {
 	defer conn.Close()
 
+	bufr := bufio.NewReader(conn)
 
+	for {
+		// Parse incoming request (blocks indefinitely until bytes arrive or client closes)
+		req, err := ReadRequest(bufr)
+		if err != nil {
+			// Clean disconnect by client is normal termination, not an error
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("read request: %w", err)
+		}
+		// Reject unsupported HTTP versions
+		if req.ProtoMajor != 1 {
+			res := NewResponse(conn)
+			res.Header().Set("Connection", "close")
+			res.WriteHeader(http.StatusHTTPVersionNotSupported)
+			_ = res.Finish()
+			return nil
+		}
 
-	// read data from connection and parse it (sepreate func)
-	buff := bufio.NewReader(conn)
+		// Negotiate Keep-Alive state
+		keepAlive := shouldKeepAlive(req)
 
-	// change this to my own implementation
-	request, err := http.ReadRequest(buff)
-	
-	if err != nil {
-		return fmt.Errorf("read request: %w", err)
+		res := NewResponse(conn)
+		if !keepAlive {
+			res.Header().Set("Connection", "close")
+		} else if isHTTP10(req) {
+			res.Header().Set("Connection", "keep-alive")
+		}
+
+		// Dispatch to Application Handler
+		mux.ServeHTTP(res, req)
+
+		// Complete response cycle (flush headers/body/terminal chunk)
+		if err := res.Finish(); err != nil {
+			return fmt.Errorf("finish response: %w", err)
+		}
+
+		// Drain any remaining unread body to align bufr with the next request
+		if req.Body != nil {
+			_, _ = io.Copy(io.Discard, req.Body)
+			_ = req.Body.Close()
+		}
+
+		// Terminate connection if closing was requested
+		if !keepAlive || strings.EqualFold(res.Header().Get("Connection"), "close") {
+			return nil
+		}
+	}
+}
+
+func shouldKeepAlive(req *http.Request) bool {
+	connVal := strings.ToLower(strings.TrimSpace(req.Header.Get("Connection")))
+
+	// HTTP/1.0 closes by default unless "keep-alive" is explicitly requested
+	if isHTTP10(req) {
+		return strings.Contains(connVal, "keep-alive")
 	}
 
-	// fmt.Printf("request:\n%v+", request)
+	// HTTP/1.1+ defaults to keep-alive unless "close" is specified
+	return !strings.Contains(connVal, "close")
+}
 
-	response := NewResponse(conn)
-	response.Request = request
-
-	response.Header().Add("testkey", "testvalue")
-	fmt.Printf("\nresponse header:\n%v", response.Header())
-
-	mux.ServeHTTP(response, request)
-
-	
-	// if err != nil {
-	// 	return fmt.Errorf("writing response: %w", err)
-	// }
-
-	if !response.wroteHeader {
-		response.WriteHeader(http.StatusOK)
-	}
-
-	return nil
-
+func isHTTP10(req *http.Request) bool {
+	return req.Proto == "HTTP/1.0" || (req.ProtoMajor == 1 && req.ProtoMinor == 0)
 }
