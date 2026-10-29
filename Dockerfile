@@ -1,11 +1,11 @@
 # Build Stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.27.3-alpine3.23 AS builder
 
 WORKDIR /app
 
 # Cache dependencies
 COPY go.mod go.sum* ./
-RUN if [ -f go.mod ]; then go mod download; fi
+# RUN go mod download
 
 # Copy source code
 COPY . .
@@ -14,9 +14,10 @@ COPY . .
 # Docker BuildKit has built-in platform arguments,  injects the target values
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -o /app/server \
     -trimpath \
-    -o /app/server .
+    ./cmd/httpserver/
+    
 
 # Distroless Runtime Stage
 # Use :nonroot to default to an unprivileged user (UID/GID 65532)
