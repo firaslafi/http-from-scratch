@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-server
+  labels:
+    app: http-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: http-server
+  template:
+    metadata:
+      labels:
+        app: http-server
+    spec:
+      # Matches the UID/GID 65532 used by gcr.io/distroless:nonroot
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+        - name: http-server
+          image: http-server:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # Liveness probe checks if the process is alive or deadlocked
+          livenessProbe:
+            httpGet:
+              path: /hello
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # Readiness probe checks if traffic can safely be routed to this pod
+          readinessProbe:
+            httpGet:
+              path: /hello
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
