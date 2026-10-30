@@ -1,0 +1,41 @@
+# Global configuration
+global:
+  cluster:
+    dnsDomain: cluster.local
+
+# VictoriaMetrics Single-node TSDB configuration
+vmsingle:
+  enabled: true
+  spec:
+    retentionPeriod: "10d"
+    storage:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Gi
+# Grafana configuration
+grafana:
+  enabled: true
+  adminPassword: ""
+  persistence:
+    enabled: false # Keeps local teardowns fast and stateless
+  sidecar:
+    dashboards:
+      enabled: false
+    datasources:
+      enabled: false
+
+# Node Exporter (host metrics)
+nodeExporter:
+  enabled: true
+
+# Kube State Metrics
+kubeStateMetrics:
+  enabled: true
+
+# Alertmanager
+vmalert:
+  enabled: false
+alertmanager:
+  enabled: false

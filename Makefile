@@ -2,7 +2,7 @@
 IMAGE_NAME   ?= http-server
 IMAGE_TAG    ?= v1.0.0
 CLUSTER_NAME ?= local-dev
-MANIFEST     ?= ./k8s/
+MANIFEST     ?= ./k8s/app/
 
 # ANSI Color Codes
 CLR_RESET   := \033[0m
