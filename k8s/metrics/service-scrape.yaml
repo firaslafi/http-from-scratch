@@ -1,0 +1,16 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: http-server-scrape
+  namespace: default
+  labels:
+    app: http-server
+spec:
+  # Discovers pods backing your Service
+  selector:
+    matchLabels:
+      app: http-server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 5s
